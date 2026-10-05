@@ -20,6 +20,8 @@ page's source: edits live in the browser (`localStorage`, per page) until you co
   and padding (green) are drawn over the page like the browser's inspector. Drag a field left or right to scrub its value like in Figma, or
   use − + and ↑ ↓; Shift steps by 8, and **↑ Parent** moves to the enclosing element. Changes are inline styles, listed
   under **Changes** with the element's tag and classes.
+- **⚙ Settings:** move the bar to the top or bottom, left, center or right, when it covers the
+  page's own controls. The position is remembered per site.
 
 ## Use it
 

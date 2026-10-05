@@ -13,6 +13,9 @@
 // margin (orange) and padding (green) drawn over the page like the browser's inspector. Those
 // changes are inline styles, kept and listed under "Changes" like the text edits.
 //
+// "⚙" moves the bar to another corner or edge (top/bottom × left/center/right), for pages whose
+// own controls sit where the bar does. That choice is kept per site, not per page.
+//
 // Runs on its own when loaded with <script src="text-editor.js">. Everything lives in the one
 // function so index.html can turn it into a bookmarklet for pages you don't control.
 function textEditor() {
@@ -57,6 +60,7 @@ function textEditor() {
         font-size: 11px; text-align: center; }
       .count:empty { display: none; }
       .close { padding: 7px 10px; opacity: .6; }
+      .gear { padding: 4px 9px; font-size: 18px; line-height: 1; }
       .panel { position: absolute; right: 0; bottom: calc(100% + 8px); width: min(380px, calc(100vw - 32px));
         padding: 12px; border-radius: 14px; background: #14121f; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
       [hidden] { display: none !important; }
@@ -97,6 +101,17 @@ function textEditor() {
       .panel.spacing { width: min(440px, calc(100vw - 32px)); }
       .field .step { padding: 5px 8px; border-radius: 8px; font-size: 14px; line-height: 1; }
       .row.left { justify-content: space-between; }
+      /* Bar position. Centring uses auto margins, not a transform: a transform on the host would
+         make it the containing block of the fixed hover and spacing overlays. */
+      :host([data-pos^="top"]) { top: 16px; bottom: auto; }
+      :host([data-pos$="left"]) { left: 16px; right: auto; }
+      :host([data-pos$="center"]) { left: 0; right: 0; width: fit-content; margin: 0 auto; }
+      :host([data-pos^="top"]) .panel { bottom: auto; top: calc(100% + 8px); }
+      :host([data-pos$="left"]) .panel { right: auto; left: 0; }
+      :host([data-pos$="center"]) .panel { right: auto; left: 50%; transform: translateX(-50%); }
+      .positions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+      .positions button { padding: 8px 6px; text-align: center; border-radius: 10px; background: rgba(255,255,255,.07); }
+      .positions button[aria-pressed="true"] { background: #7c5cff; }
     </style>
     <div class="hover"></div>
     <div class="box-m"></div>
@@ -116,11 +131,16 @@ function textEditor() {
       <textarea readonly></textarea>
       <div class="row"><button class="reset">Undo all</button><button class="copy">Copy</button></div>
     </div>
+    <div class="panel settings" hidden>
+      <p class="hint">Where the bar sits. Remembered in this browser for this site.</p>
+      <div class="positions"></div>
+    </div>
     <div class="bar">
       <button class="toggle" aria-pressed="false">✎ Edit text</button>
       <button class="space" aria-pressed="false">↔ Spacing</button>
       <button class="opts" aria-expanded="false" hidden>Options</button>
       <button class="list" aria-expanded="false">Changes <span class="count"></span></button>
+      <button class="gear" aria-expanded="false" aria-label="Settings" title="Settings">⚙</button>
       <button class="close" aria-label="Close">✕</button>
     </div>`;
   const $ = (s) => ui.querySelector(s);
@@ -128,6 +148,7 @@ function textEditor() {
   const panel = $('.changes');
   const optionsPanel = $('.options');
   const spacingPanel = $('.spacing');
+  const settingsPanel = $('.settings');
   const boxM = $('.box-m');
   const boxP = $('.box-p');
 
@@ -492,6 +513,7 @@ function textEditor() {
     [panel, $('.list')],
     [optionsPanel, $('.opts')],
     [spacingPanel, null],
+    [settingsPanel, $('.gear')],
   ];
   const showPanel = (which) => {
     for (const [p, button] of panels()) {
@@ -502,6 +524,32 @@ function textEditor() {
   const openPanel = (which) => showPanel(which.hidden ? which : null);
   $('.list').onclick = () => openPanel(panel);
   $('.opts').onclick = () => openPanel(optionsPanel);
+  $('.gear').onclick = () => openPanel(settingsPanel);
+
+  // Bar position, per site: a page's own controls tend to sit in the same corner on every page.
+  const posKey = `text-editor:${location.host}:position`;
+  const positions = ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'];
+  const place = (pos) => {
+    host.dataset.pos = pos;
+    try {
+      localStorage.setItem(posKey, pos);
+    } catch {}
+    for (const b of $('.positions').children) b.setAttribute('aria-pressed', String(b.dataset.pos === pos));
+  };
+  $('.positions').replaceChildren(
+    ...positions.map((pos) => {
+      const b = document.createElement('button');
+      b.dataset.pos = pos;
+      b.textContent = pos.replace('-', ' ').replace(/^./, (c) => c.toUpperCase());
+      b.onclick = () => place(pos);
+      return b;
+    }),
+  );
+  let savedPos = null;
+  try {
+    savedPos = localStorage.getItem(posKey);
+  } catch {}
+  place(positions.includes(savedPos) ? savedPos : 'bottom-right');
 
   // Variant groups: show one child per [data-variants] group, step through them from the panel.
   const pickKey = `${storageKey}:variants`;
@@ -516,8 +564,12 @@ function textEditor() {
     const variants = variantsOf(g);
     if (!variants.length) return;
     index = (index + variants.length) % variants.length;
-    // Inline display rather than [hidden], which a page's own display classes can override.
-    variants.forEach((v, j) => (v.style.display = j === index ? '' : 'none'));
+    // Inline display rather than [hidden], which a page's own display classes can override. The
+    // variant's own inline display (say display:grid) is kept aside and put back when it shows.
+    variants.forEach((v, j) => {
+      if (!('teDisplay' in v.dataset)) v.dataset.teDisplay = v.style.display;
+      v.style.display = j === index ? v.dataset.teDisplay : 'none';
+    });
     picks[groupName(g, i)] = index;
     try {
       localStorage.setItem(pickKey, JSON.stringify(picks));
