@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Text Editor</title>
+    <style>
+      :root { --bg: #fbfaf7; --ink: #14121f; --muted: #5e5a6e; --accent: #7c5cff; }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #14121f; --ink: #f4f2fb; --muted: #a29eb4; }
+      }
+      body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.6 system-ui, -apple-system, sans-serif; }
+      main { max-width: 38rem; margin: 0 auto; padding: 72px 16px 120px; }
+      h1 { font-size: 2.25rem; line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 16px; }
+      p, li { color: var(--muted); }
+      ol { padding-left: 1.2em; }
+      .bookmarklet { display: inline-block; margin: 8px 0 24px; padding: 10px 18px; border-radius: 999px;
+        background: var(--accent); color: #fff; font-weight: 600; text-decoration: none; cursor: grab; }
+      pre { padding: 12px 14px; border-radius: 10px; background: rgba(124,92,255,.08); overflow-x: auto; }
+      code { font-size: 0.9em; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Edit the text of any page</h1>
+      <p>The bar in the bottom-right corner is the editor, running on this page. Turn on “Edit text”, click
+        this paragraph and type. Enter keeps the change, Shift+Enter adds a line break, and Escape undoes the edit.</p>
+
+      <h2>On another website</h2>
+      <ol>
+        <li>Drag this button to your bookmarks bar:</li>
+      </ol>
+      <a class="bookmarklet" id="bookmarklet" href="#">Edit text</a>
+      <ol start="2">
+        <li>Open any page and click the bookmark.</li>
+        <li>Your changes are saved in this browser for that page, and they come back the next time you click
+          the bookmark there. “Changes” lists every edit, old → new, ready to copy.</li>
+      </ol>
+      <p>To have the editor on a site you build yourself, add <code>&lt;script src="text-editor.js"&gt;&lt;/script&gt;</code>.</p>
+
+      <h2>Switching between variants</h2>
+      <p>Wrap design options in <code>data-variants</code>, one child per option with <code>data-variant</code>.
+        “Options” in the bar then steps through them, one at a time, and remembers your pick:</p>
+      <pre><code>&lt;div data-variants="Button"&gt;
+  &lt;div data-variant="Solid"&gt;…&lt;/div&gt;
+  &lt;div data-variant="Outline"&gt;…&lt;/div&gt;
+&lt;/div&gt;</code></pre>
+      <div data-variants="Demo button">
+        <div data-variant="Solid"><a class="bookmarklet" href="#" style="cursor:pointer">Get started</a></div>
+        <div data-variant="Outline"><a href="#" style="display:inline-block;padding:9px 17px;border-radius:999px;border:1px solid var(--accent);color:var(--accent);font-weight:600;text-decoration:none">Get started</a></div>
+        <div data-variant="Text link"><a href="#" style="color:var(--accent);font-weight:600">Get started →</a></div>
+      </div>
+    </main>
+
+    <script src="text-editor.js"></script>
+    <script>
+      // The bookmarklet is the same function as the script above, so the two can't drift apart.
+      document.getElementById('bookmarklet').href = 'javascript:' + encodeURIComponent(`(${textEditor})()`);
+    </script>
+  </body>
+</html>
