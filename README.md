@@ -8,7 +8,7 @@ project as is.
 
 | Tool | What it does |
 | --- | --- |
-| [editHTML](editHTML/) | A floating bar for any web page: edit text in place and switch between design variants marked up with `data-variants`. |
+| [editHTML](editHTML/) | A floating bar for any web page: edit text in place, tune margin, padding and gap, and switch between design variants marked up with `data-variants`. |
 
 How agents should use and add tools is in [AGENTS.md](AGENTS.md).
 

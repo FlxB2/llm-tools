@@ -9,6 +9,10 @@
 //   </div>
 // Only one variant per group shows at a time; the pick is remembered per page like the text edits.
 //
+// "Spacing" lets you click any element and change its margin, padding and gap in px, with the
+// margin (orange) and padding (green) drawn over the page like the browser's inspector. Those
+// changes are inline styles, kept and listed under "Changes" like the text edits.
+//
 // Runs on its own when loaded with <script src="text-editor.js">. Everything lives in the one
 // function so index.html can turn it into a bookmarklet for pages you don't control.
 function textEditor() {
@@ -70,8 +74,39 @@ function textEditor() {
       .stepper button { padding: 6px 10px; }
       .hover { position: fixed; pointer-events: none; border: 2px solid #7c5cff; border-radius: 4px;
         background: rgba(124,92,255,.06); display: none; }
+      .box-m, .box-p { position: fixed; pointer-events: none; box-sizing: border-box; border-style: solid; display: none; }
+      .box-m { border-color: rgba(246,166,82,.45); }
+      .box-p { border-color: rgba(120,190,110,.5); outline: 1.5px solid #7c5cff; }
+      .space[aria-pressed="true"] { background: #7c5cff; }
+      .el { margin: 0 0 10px; font: 12px/1.4 ui-monospace, monospace; opacity: .85; word-break: break-all;
+        max-height: 3.6em; overflow: hidden; }
+      .grid { display: grid; grid-template-columns: auto 1fr 1fr; gap: 6px 8px; align-items: center; }
+      .grid .head { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; opacity: .6; }
+      .grid .head.m { color: #f6a652; opacity: 1; }
+      .grid .head.p { color: #78be6e; opacity: 1; }
+      .grid label { opacity: .7; font-size: 12px; }
+      input { all: unset; box-sizing: border-box; width: 100%; padding: 6px 8px; border-radius: 8px;
+        background: rgba(255,255,255,.07); font: 12px ui-monospace, monospace; color: inherit; }
+      input:focus { outline: 2px solid #9b87ff; }
+      input.changed { background: rgba(124,92,255,.35); }
+      input::-webkit-inner-spin-button, input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+      input[type=number] { -moz-appearance: textfield; text-align: center; cursor: ew-resize; touch-action: none; }
+      input[type=number]:focus { cursor: text; }
+      .field { display: flex; align-items: center; gap: 2px; min-width: 0; }
+      .field input { flex: 1; min-width: 0; }
+      .panel.spacing { width: min(440px, calc(100vw - 32px)); }
+      .field .step { padding: 5px 8px; border-radius: 8px; font-size: 14px; line-height: 1; }
+      .row.left { justify-content: space-between; }
     </style>
     <div class="hover"></div>
+    <div class="box-m"></div>
+    <div class="box-p"></div>
+    <div class="panel spacing" hidden>
+      <p class="hint">Click an element. Values in px. Drag a field left or right, or use − + and ↑ ↓; Shift for steps of 8.</p>
+      <p class="el"></p>
+      <div class="grid"></div>
+      <div class="row left"><button class="parent">↑ Parent</button><button class="unselect">Done</button></div>
+    </div>
     <div class="panel options" hidden>
       <p class="hint">Variants on this page. Your pick is remembered here.</p>
       <div class="groups"></div>
@@ -83,6 +118,7 @@ function textEditor() {
     </div>
     <div class="bar">
       <button class="toggle" aria-pressed="false">✎ Edit text</button>
+      <button class="space" aria-pressed="false">↔ Spacing</button>
       <button class="opts" aria-expanded="false" hidden>Options</button>
       <button class="list" aria-expanded="false">Changes <span class="count"></span></button>
       <button class="close" aria-label="Close">✕</button>
@@ -91,6 +127,9 @@ function textEditor() {
   const hover = $('.hover');
   const panel = $('.changes');
   const optionsPanel = $('.options');
+  const spacingPanel = $('.spacing');
+  const boxM = $('.box-m');
+  const boxP = $('.box-p');
 
   // Page-side marks for edited and active texts, keyed on our own attributes only.
   const pageStyle = document.createElement('style');
@@ -175,14 +214,25 @@ function textEditor() {
 
   const render = () => {
     const list = Object.values(changes);
-    $('.count').textContent = list.length || '';
-    $('textarea').value = list.length
-      ? `${location.href}\n\n` + list.map((c, i) => `${i + 1}. "${c.beforeText}"\n   → "${c.afterText}"`).join('\n\n')
+    const spaced = Object.values(spacing);
+    const count = list.length + spaced.reduce((n, s) => n + Object.keys(s.props).length, 0);
+    $('.count').textContent = count || '';
+    const text = list.map((c, i) => `${i + 1}. "${c.beforeText}"\n   → "${c.afterText}"`).join('\n\n');
+    const space = spaced
+      .map((s, i) =>
+        [`${i + 1}. ${s.label}`, ...Object.entries(s.props).map(([p, r]) => `   ${p}: ${r.before} → ${r.after}`)].join('\n'),
+      )
+      .join('\n\n');
+    $('textarea').value = count
+      ? [location.href, list.length && `Text:\n\n${text}`, spaced.length && `Spacing:\n\n${space}`].filter(Boolean).join('\n\n')
       : 'No changes yet.';
   };
 
   const onMove = (e) => {
     const el = !current || !current.contains(e.target) ? textTarget(e.target) : null;
+    drawHover(el);
+  };
+  const drawHover = (el) => {
     if (!el) return (hover.style.display = 'none');
     const r = el.getBoundingClientRect();
     Object.assign(hover.style, {
@@ -212,7 +262,213 @@ function textEditor() {
   };
   const hideHover = () => (hover.style.display = 'none');
 
+  // Spacing: path → { label, props: { 'padding-top': { inline, before, after } } }, where inline is
+  // the element's own inline value before we touched it, so undo puts back exactly that.
+  const spaceKey = `${storageKey}:spacing`;
+  let spacing = {};
+  try {
+    spacing = JSON.parse(localStorage.getItem(spaceKey)) || {};
+  } catch {}
+  const saveSpacing = () => {
+    try {
+      localStorage.setItem(spaceKey, JSON.stringify(spacing));
+    } catch {}
+  };
+  const sides = ['top', 'right', 'bottom', 'left'];
+  let spaceOn = false;
+  let selected = null;
+
+  // How the element reads in the change list: its tag, id and (trimmed) classes, enough to find it
+  // in the source.
+  const describe = (el) => {
+    const cls = (el.getAttribute('class') || '').trim().replace(/\s+/g, ' ');
+    const id = el.id ? ` id="${el.id}"` : '';
+    return `<${el.tagName.toLowerCase()}${id}${cls ? ` class="${cls.length > 90 ? `${cls.slice(0, 90)}…` : cls}"` : ''}>`;
+  };
+  const px = (el, prop) => Math.round(parseFloat(getComputedStyle(el).getPropertyValue(prop)) || 0);
+
+  // Margin and padding as bands, the way the browser's inspector shows them: each box's border
+  // widths are the element's margins and paddings.
+  const drawBox = (el) => {
+    if (!el) {
+      boxM.style.display = boxP.style.display = 'none';
+      return;
+    }
+    const r = el.getBoundingClientRect();
+    const v = (p) => Math.max(px(el, p), 0);
+    const m = sides.map((s) => v(`margin-${s}`));
+    const b = sides.map((s) => v(`border-${s}-width`));
+    const p = sides.map((s) => v(`padding-${s}`));
+    Object.assign(boxM.style, {
+      display: 'block',
+      left: `${r.left - m[3]}px`,
+      top: `${r.top - m[0]}px`,
+      width: `${r.width + m[1] + m[3]}px`,
+      height: `${r.height + m[0] + m[2]}px`,
+      borderWidth: m.map((x) => `${x}px`).join(' '),
+    });
+    Object.assign(boxP.style, {
+      display: 'block',
+      left: `${r.left + b[3]}px`,
+      top: `${r.top + b[0]}px`,
+      width: `${r.width - b[1] - b[3]}px`,
+      height: `${r.height - b[0] - b[2]}px`,
+      borderWidth: p.map((x) => `${x}px`).join(' '),
+    });
+  };
+
+  const setProp = (el, prop, value) => {
+    const path = pathOf(el);
+    const entry = (spacing[path] ??= { label: describe(el), props: {} });
+    const rec = (entry.props[prop] ??= { inline: el.style.getPropertyValue(prop), before: `${px(el, prop)}px` });
+    const after = `${value}px`;
+    if (after === rec.before) {
+      rec.inline ? el.style.setProperty(prop, rec.inline) : el.style.removeProperty(prop);
+      delete entry.props[prop];
+      if (!Object.keys(entry.props).length) delete spacing[path];
+    } else {
+      el.style.setProperty(prop, after);
+      rec.after = after;
+    }
+    saveSpacing();
+    render();
+    drawBox(el);
+  };
+
+  const renderSpacing = () => {
+    const el = selected;
+    $('.el').textContent = el ? describe(el) : 'Nothing selected yet.';
+    $('.parent').hidden = !el || el.parentElement === document.body || !el.parentElement;
+    const grid = $('.grid');
+    grid.replaceChildren();
+    if (!el) return;
+    const touched = spacing[pathOf(el)]?.props ?? {};
+    const cell = (tag, text, cls) => {
+      const n = document.createElement(tag);
+      if (text) n.textContent = text;
+      if (cls) n.className = cls;
+      grid.append(n);
+    };
+    const input = (prop, label) => {
+      const i = document.createElement('input');
+      i.type = 'number';
+      i.value = px(el, prop);
+      i.title = prop;
+      i.setAttribute('aria-label', `${label} ${prop}`);
+      if (touched[prop]) i.classList.add('changed');
+      i.oninput = () => {
+        if (i.value === '' || isNaN(+i.value)) return;
+        setProp(el, prop, Math.round(+i.value));
+        i.classList.toggle('changed', !!spacing[pathOf(el)]?.props[prop]);
+      };
+      const step = (by) => {
+        i.value = (+i.value || 0) + by;
+        i.oninput();
+      };
+      i.onkeydown = (e) => {
+        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+        e.preventDefault();
+        step((e.key === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 8 : 1));
+      };
+      // Scrub like Figma: press on the field and drag left or right, 1 px per 3 px of movement (8 with
+      // Shift). A press without a drag still focuses the field for typing.
+      i.onpointerdown = (e) => {
+        if (document.activeElement === i || ui.activeElement === i) return;
+        e.preventDefault();
+        const x0 = e.clientX;
+        const v0 = +i.value || 0;
+        let dragged = false;
+        i.setPointerCapture(e.pointerId);
+        i.onpointermove = (m) => {
+          const dx = m.clientX - x0;
+          if (!dragged && Math.abs(dx) < 3) return;
+          dragged = true;
+          const value = v0 + Math.round(dx / 3) * (m.shiftKey ? 8 : 1);
+          if (+i.value !== value) {
+            i.value = value;
+            i.oninput();
+          }
+        };
+        i.onpointerup = () => {
+          i.onpointermove = i.onpointerup = null;
+          if (!dragged) {
+            i.focus();
+            i.select();
+          }
+        };
+      };
+      // − and + beside the field; Shift-click steps by 8.
+      const button = (text, sign) => {
+        const b = document.createElement('button');
+        b.className = 'step';
+        b.textContent = text;
+        b.setAttribute('aria-label', `${sign > 0 ? 'Increase' : 'Decrease'} ${prop}`);
+        b.onclick = (e) => step(sign * (e.shiftKey ? 8 : 1));
+        return b;
+      };
+      const field = document.createElement('div');
+      field.className = 'field';
+      field.append(button('−', -1), i, button('+', 1));
+      grid.append(field);
+    };
+    cell('span');
+    cell('span', 'Margin', 'head m');
+    cell('span', 'Padding', 'head p');
+    for (const s of sides) {
+      cell('label', s[0].toUpperCase() + s.slice(1));
+      input(`margin-${s}`, 'Margin');
+      input(`padding-${s}`, 'Padding');
+    }
+    cell('label', 'Gap ↕ ↔');
+    input('row-gap', 'Gap');
+    input('column-gap', 'Gap');
+  };
+
+  const select = (el) => {
+    selected = el;
+    drawBox(el);
+    renderSpacing();
+    showPanel(spacingPanel);
+  };
+  const onSpaceMove = (e) => {
+    const el = e.composedPath().includes(host) ? null : e.target;
+    drawHover(el && el !== selected && el !== document.documentElement ? el : null);
+  };
+  const onSpaceClick = (e) => {
+    if (e.composedPath().includes(host)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.target !== document.documentElement) select(e.target);
+  };
+  const onSpaceKey = (e) => {
+    if (e.key === 'Escape' && !e.composedPath().includes(host)) select(null);
+  };
+  const onSpaceScroll = () => {
+    hideHover();
+    drawBox(selected);
+  };
+
+  const setSpace = (value) => {
+    if (value) setOn(false);
+    spaceOn = value;
+    $('.space').setAttribute('aria-pressed', String(spaceOn));
+    const method = spaceOn ? 'addEventListener' : 'removeEventListener';
+    document[method]('mousemove', onSpaceMove, true);
+    document[method]('click', onSpaceClick, true);
+    document[method]('keydown', onSpaceKey, true);
+    window[method]('scroll', onSpaceScroll, true);
+    window[method]('resize', onSpaceScroll);
+    if (spaceOn) select(selected);
+    else {
+      selected = null;
+      drawBox(null);
+      hideHover();
+      if (!spacingPanel.hidden) showPanel(null);
+    }
+  };
+
   const setOn = (value) => {
+    if (value) setSpace(false);
     on = value;
     $('.toggle').setAttribute('aria-pressed', String(on));
     document.documentElement.toggleAttribute('data-te-on', on);
@@ -228,16 +484,22 @@ function textEditor() {
   };
 
   $('.toggle').onclick = () => setOn(!on);
-  // One panel open at a time.
-  const openPanel = (which) => {
-    for (const [p, button] of [
-      [panel, $('.list')],
-      [optionsPanel, $('.opts')],
-    ]) {
-      p.hidden = p !== which || !p.hidden;
-      button.setAttribute('aria-expanded', String(!p.hidden));
+  $('.space').onclick = () => setSpace(!spaceOn);
+  $('.parent').onclick = () => selected?.parentElement && select(selected.parentElement);
+  $('.unselect').onclick = () => setSpace(false);
+  // One panel open at a time. openPanel toggles the one asked for; showPanel just shows it.
+  const panels = () => [
+    [panel, $('.list')],
+    [optionsPanel, $('.opts')],
+    [spacingPanel, null],
+  ];
+  const showPanel = (which) => {
+    for (const [p, button] of panels()) {
+      p.hidden = p !== which;
+      button?.setAttribute('aria-expanded', String(!p.hidden));
     }
   };
+  const openPanel = (which) => showPanel(which.hidden ? which : null);
   $('.list').onclick = () => openPanel(panel);
   $('.opts').onclick = () => openPanel(optionsPanel);
 
@@ -316,10 +578,21 @@ function textEditor() {
     }
     changes = {};
     save();
+    for (const [path, s] of Object.entries(spacing)) {
+      const el = find(path);
+      if (!el) continue;
+      for (const [prop, r] of Object.entries(s.props)) {
+        r.inline ? el.style.setProperty(prop, r.inline) : el.style.removeProperty(prop);
+      }
+    }
+    spacing = {};
+    saveSpacing();
     render();
+    if (selected) select(selected);
   };
   $('.close').onclick = () => {
     setOn(false);
+    setSpace(false);
     host.remove();
     pageStyle.remove();
     delete window.__textEditor;
@@ -331,6 +604,10 @@ function textEditor() {
     const el = find(path);
     if (el && el.innerHTML === c.before) el.innerHTML = c.after;
     if (el && el.innerHTML === c.after) el.setAttribute('data-te-edited', '');
+  }
+  for (const [path, s] of Object.entries(spacing)) {
+    const el = find(path);
+    if (el) for (const [prop, r] of Object.entries(s.props)) el.style.setProperty(prop, r.after);
   }
 
   document.head.append(pageStyle);

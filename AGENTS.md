@@ -17,6 +17,10 @@ no dependencies and no build step, so nothing needs installing.
 - **Copy edits:** the user can rewrite text in place with **Edit text**, but edits stay in their
   browser and never reach the source files. Ask them to copy **Changes** and apply the list
   yourself.
+- **Spacing:** the user can tune margin, padding and gap on the live page with **Spacing**. The
+  copied **Changes** list each element by tag and classes with old → new px values; find that
+  element in the source and translate the values into the project's own spacing scale (e.g. its
+  Tailwind steps or design tokens) rather than pasting raw px.
 - Remove the variants you didn't pick, and the script, once the user has decided.
 
 ## Adding a tool
