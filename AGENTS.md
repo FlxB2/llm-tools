@@ -35,6 +35,27 @@ no dependencies and no build step, so nothing needs installing.
   images match the rest of the design.
 - Look at one result before framing a whole batch.
 
+### deviceDemo
+
+- Run it before capturing screenshots for anything people will see (store listings, landing pages,
+  docs), so the status bar shows 9:41 and a full battery instead of the real time and state.
+- Use `--theme` and `--locale` to capture every theme and language variant from one device instead
+  of asking the user to change settings. Prefer `--app` for the language: it's faster and doesn't
+  restart anything.
+- Run `--reset` afterwards, and set the theme and language back to what they were; it may be an
+  emulator the user or another session keeps using.
+- Drive the app itself with the UI automation tool you already have (e.g. Maestro); this only
+  covers device settings.
+
+### compareImages
+
+- Reach for it whenever the user should choose between or check several images: design variants,
+  before and after a change, screenshots in each language or theme. One labelled sheet is easier to
+  judge than several files.
+- Use `--diff` to check what a change actually did to a screenshot, and quote the changed share.
+- Use `--zoom` when the difference is small (an icon, a border, a line of text).
+- Look at the sheet yourself before showing it, and say what to look for.
+
 ## Adding a tool
 
 - One folder per tool, named after it, with a `README.md` that says what it does, how to use it and
