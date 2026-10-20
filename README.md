@@ -10,6 +10,7 @@ Scripts declare their dependencies inline, so `uv` runs them directly.
 | --- | --- |
 | [editHTML](editHTML/) | A floating bar for any web page: edit text in place, tune margin, padding and gap, and switch between design variants marked up with `data-variants`. |
 | [flattenPdfFades](flattenPdfFades/) | Makes gradient fades (soft masks) in exported PDFs render the same in every reader, macOS Preview included. |
+| [phoneFrame](phoneFrame/) | Puts an iPhone or Android phone frame around app screenshots; the platform and camera cutout are picked from the resolution. |
 
 How agents should use and add tools is in [AGENTS.md](AGENTS.md).
 

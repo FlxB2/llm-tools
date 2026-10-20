@@ -23,6 +23,18 @@ no dependencies and no build step, so nothing needs installing.
   Tailwind steps or design tokens) rather than pasting raw px.
 - Remove the variants you didn't pick, and the script, once the user has decided.
 
+### phoneFrame
+
+- Reach for it whenever app screenshots (simulator, emulator, Maestro or other UI test runs) need to
+  look like a phone: landing pages, store listings, decks, READMEs.
+- Run it in place with `uv`; don't copy it into the project unless the project should regenerate
+  the images itself (then commit the script next to the assets it makes).
+- Leave `--platform` and `--cutout` on auto unless the screenshot was resized or cropped, since the
+  guess relies on the exact device resolution.
+- If the project has a designer-made device frame (a Figma export), pass it with `--mockup` so the
+  images match the rest of the design.
+- Look at one result before framing a whole batch.
+
 ## Adding a tool
 
 - One folder per tool, named after it, with a `README.md` that says what it does, how to use it and
